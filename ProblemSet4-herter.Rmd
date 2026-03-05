@@ -1,0 +1,244 @@
+---
+title: "ProblemSet4"
+output: html_document
+---
+### Air Quality and Ozone 
+Data from US Environmental Protection Agency https://www.epa.gov/outdoor-air-quality-data  
+1. Click daily download on the left-hand side  
+2. Choose 1: PM2.5, 2: 2020, 3: Eugene, OR, 4: All sites.
+3. Download and examine the data.  
+4. Import the data into R and store it as a tibble. You might want to give short, descriptive column names.
+
+```{r}
+library(tidyverse)
+
+# Import the CSV as a tibble
+air_quality <- read_csv("2020_Eugene.csv",
+                        show_col_types = FALSE) %>%  
+  # Parse Date as a Date object
+  mutate(date = mdy(Date)) %>%  # mdy() 
+  # Rename columns to short, descriptive names
+  rename(
+    source = Source,
+    site_id = `Site ID`,
+    poc = POC,
+    pm25_mean = `Daily Mean PM2.5 Concentration`,
+    units = Units,
+    aqi_daily = `Daily AQI Value`,
+    site_name = `Local Site Name`,
+    obs_count = `Daily Obs Count`,
+    percent_complete = `Percent Complete`,
+    param_code = `AQS Parameter Code`,
+    param_desc = `AQS Parameter Description`,
+    method_code = `Method Code`,
+    method_desc = `Method Description`,
+    cbsa_code = `CBSA Code`,
+    cbsa_name = `CBSA Name`,
+    state_fips = `State FIPS Code`,
+    state = State,
+    county_fips = `County FIPS Code`,
+    county = County,
+    lat = `Site Latitude`,
+    lon = `Site Longitude`
+  ) %>%
+  # Drop the original Date column since we have parsed 'date'
+  select(-Date) %>%
+  # Reorder columns for convenience (key vars first)
+  select(date, site_name, site_id, pm25_mean, aqi_daily, everything())
+
+
+head(air_quality)
+glimpse(air_quality)
+
+```
+
+
+**1) Understand the data:**.  
+i) What do the columns mean?  For "self-explanatory" ones, like Date, feel free to interpret from the dataset. For others (e.g., POC? AQS Parameter Code?) you might need to do a bit of digging on the website. 
+- PM2.5 refers to fine particulate matter with particles 2.5 micrometers or smaller in diameter — small enough to penetrate deep into the lungs. It is one of the six EPA criteria air pollutants with a national air quality standard.
+- AQI runs from 0 to 500 — higher values mean more pollution and greater health concern. An AQI of 100 corresponds to the national air quality standard for the pollutant. Values below 100 are considered satisfactory; values above 100 indicate conditions that are unhealthy, first for sensitive groups and then for everyone as values rise.
+- POC is used to distinguish between multiple monitors at the same site that measure the same pollutant  
+- obs count is the number of hourly observations averaged to produce the daily mean 
+- cbsa_code and cbsa_name identifies the metropolitan area. Per the EPA's AQI reports, a CBSA is used as the geographic unit for AQI summaries. 
+
+
+
+ii) Where would you go for more information?    
+- The EPA's AirData page at https://www.epa.gov/outdoor-air-quality-data/air-data-basic-information explains all core concepts including AQI categories, pollutant types, and how monitoring data is collected. The About AQS Data page at https://aqs.epa.gov/aqsweb/documents/about_aqs_data.html has full technical documentation on column definitions, parameter codes, and measurement methods. 
+
+iii) Are there missing values in this dataset? Have a first pass at this question based on an overview of the dataset, *then return once you've graphed it in part 2 - does your answer change after initial graphing? Why might some of the sites (e.g., Three Sisters Wilderness) have missing data?*     
+
+- The data has gaps even if it doesn’t show NAN or NA some dates just have no row for certain sites. The graphs make the missing parts clear, especially at far-away wilderness sites like Three Sisters, because they are hard to maintain and often only collect data part of the year.
+
+
+**2) Plot the data:**
+
+i) How did pm2.5 change over the course of 2020 at each site? Were there any major spikes? If so, when, and what do you think caused it?  Make sure to consider what data type your columns are - do you need to adjust any of them?? 
+```{r}
+ggplot(air_quality, aes(x = date, y = pm25_mean, color = site_name)) +
+  geom_line(alpha = 0.7) +                          # semi-transparent lines so overlapping sites are visible
+  labs(
+    x     = "Date",
+    y     = "Daily Mean PM2.5 (ug/m3)",
+    title = "Daily PM2.5 Concentrations at Eugene-Area Sites, 2020",
+    color = "Site"
+  ) +
+  theme_classic(base_size = 12) +
+  theme(legend.position = "bottom",                 # move legend below so it doesn't crowd the plot
+        legend.text = element_text(size = 6))       # shrink legend text to fit multiple site names
+```
+- There is a dramatic spike in PM2.5 in September 2020, this corresponds to the major Oregon wildfires of September 2020, which produced some of the worst air quality in recorded history for the region.
+
+ii) How correlated was average daily pm2.5 between Eugene and the coast? Please graph the correlation between the *average daily pm2.5* in the "Eugene - Amazon Park (AMZ)" and "Florence - Oregon Dept of Forestry (FDF)" locations over the whole year, and for just "normal" (i.e., non-spiked, pm 2.5 less than 50) time periods (Hint - to make these graphs, you might need to calculate daily averages, and you might need to create a second object in which you transpose/pivot the data).    
+
+```{r}
+daily_avg <- air_quality %>%
+  group_by(date, site_name) %>%
+  summarize(pm25_avg = mean(pm25_mean, na.rm = TRUE), .groups = "drop") #calculate avg
+
+# Filter to just the two sites to compare
+# then pivot to wide format so each site becomes its own column
+
+two_sites <- daily_avg %>%
+  filter(site_name %in% c("Eugene - Amazon Park (AMZ)",
+                           "Florence - Oregon Dept of Forestry (FDF)")) %>%
+  pivot_wider(names_from  = site_name,              # each site name becomes a column
+              values_from = pm25_avg) %>%
+  rename(eugene  = `Eugene - Amazon Park (AMZ)`,
+         florence = `Florence - Oregon Dept of Forestry (FDF)`) %>%
+  drop_na()                                          # remove rows where either site has no reading
+
+# Plot 1: Correlation across the full year including wildfire spikes
+ggplot(two_sites, aes(x = florence, y = eugene)) +
+  geom_point(alpha = 0.5, color = "blue") +    # semi-transparent points to show overplotting
+  geom_smooth(method = "lm", color = "red") +        # add linear trend line
+  labs(
+    x     = "Florence ODF - Daily Mean PM2.5 (ug/m3)",
+    y     = "Eugene Amazon Park - Daily Mean PM2.5 (ug/m3)",
+    title = "PM2.5 Correlation: Eugene vs Florence, Full Year 2020"
+  ) +
+  theme_classic()
+
+# Plot 2: Same correlation but excluding wildfire smoke spikes (pm2.5 < 50)
+# This shows the "normal" relationship between the two sites without extreme events
+two_sites_normal <- two_sites %>%
+  filter(eugene < 50, florence < 50)                 # keep only non-spiked days
+
+ggplot(two_sites_normal, aes(x = florence, y = eugene)) +
+  geom_point(alpha = 0.5, color = "green") +
+  geom_smooth(method = "lm", color = "red") +
+  labs(
+    x     = "Florence ODF - Daily Mean PM2.5 (ug/m3)",
+    y     = "Eugene Amazon Park - Daily Mean PM2.5 (ug/m3)",
+    title = "PM2.5 Correlation: Eugene vs Florence, Non-Spiked Days Only (PM2.5 < 50)"
+  ) +
+  theme_classic()
+
+```
+- Eugene vs Florence full year: On most normal days both sites had very low PM2.5 and were fairly similar to each other that's the big cluster of points squeezed into the bottom left corner. The wildfire smoke in September 2020 caused the extreme outliers you see scattered around the edges.
+
+- after you filter out the sept 2020 fire, Florence consistently stays below 10 ug/m3 while Eugene shows high variance. The wide confidence interval around the regression line confirms that the relationship is statistically uncertain and not a reliable predictor.
+
+iii) Download and load a second dataset focused on just pm10 in 2020 from the Eugene Hwy 99 site.   
+Choose 1: PM10, 2: 2020, 3: Eugene, OR, 4: 410390059  
+a. Merge the pm2.5 and pm10 datasets, retaining only observations that have both pm2.5 and pm10. Make sure that you have the same column names in both your original and this dataset for columns you want to join by! You might also consider just retaining the columns of interest so that you don't have accidental merge conflicts. 
+```{r}
+pm10 <- read_csv("pm10_Eugene.csv",
+                 show_col_types = FALSE) %>%
+  mutate(date = mdy(Date)) %>%
+  rename(
+    site_id   = `Site ID`,
+    site_name = `Local Site Name`,
+    pm10_mean = `Daily Mean PM10 Concentration`
+  ) %>%
+  select(date, site_id, site_name, pm10_mean)        # keep only columns needed for the merge
+
+# filter to the same Hwy 99 site and keep only key columns
+# The site_id for Eugene Hwy 99 is 410390059
+pm25_hwy99 <- air_quality %>%
+  filter(site_id == 410390059) %>%
+  select(date, site_id, site_name, pm25_mean)
+
+# Merge using inner_join, only keep dates that have BOTH pm2.5 AND pm10 readings
+# join on date and site_id to match the same day at the same location
+pm_combined <- inner_join(pm25_hwy99, pm10,
+                          by = c("date", "site_id"))
+
+head(pm_combined)
+
+```
+b. What type of join did you use? Why? 
+
+- Inner join: only keeps days where both pm2.5 and pm10 were measured
+
+
+iv) Graph the relationship between the monthly average values of pm2.5 and pm10 in Eugene.  
+```{r}
+monthly_avg <- pm_combined %>%
+  mutate(month = floor_date(date, "month")) %>%   # collapse each date to its month
+  group_by(month) %>% #ll daily observations from the same month will now be treated together
+  summarize(
+    pm25_monthly = mean(pm25_mean, na.rm = TRUE), #Average daily PM2.5 concentration for that month
+    pm10_monthly = mean(pm10_mean, na.rm = TRUE), # Average daily PM10 concentration for that month
+    .groups = "drop"
+  )
+
+ggplot(monthly_avg, aes(x = pm10_monthly, y = pm25_monthly)) +
+  geom_point(size = 3, color = "blue") +
+  geom_smooth(method = "lm", color = "red", se = TRUE) +  # linear trend with confidence band
+  labs(
+    x     = "Monthly Mean PM10 (ug/m3)",
+    y     = "Monthly Mean PM2.5 (ug/m3)",
+    title = "Monthly Average PM2.5 vs PM10 at Eugene Hwy 99, 2020"
+  ) +
+  theme_classic() #white background + no grid lines + simple black axes
+
+```
+- In 2020 in Eugene, fine smoke (PM2.5) and coarser dust/smoke (PM10) tracked each other very closely they were both low most months, but exploded together during the big wildfire smoke in September
+
+v) Graph it again making it as UGLY as you possibly can. We want to see as many uglifying changes as you POSSIBLY can!
+```{r}
+ggplot(monthly_avg, aes(pm10_monthly, pm25_monthly)) +
+  geom_point(size=15, shape=11, colour="cyan", fill="magenta") +
+  geom_smooth(method="lm", colour="green", linewidth=6, fill="yellow", alpha=0.6) +
+  scale_x_log10(labels=~paste0(.,"!")) +
+  scale_y_log10(labels=~paste0("?",.)) +
+  labs(x="PM10!!!!", y="PM2.5", title="eug vs florene 2020") +
+  theme(
+    plot.background = element_rect(fill="yellow"),
+    panel.background = element_rect(fill="cyan"),
+    axis.text = element_text(colour="red", size=5, angle=45),         
+    axis.title = element_text(colour="blue", size=20),                
+    plot.title = element_text(colour="black", size=18, face="bold", hjust=0.5)
+  )
+```
+
+vi) Graph it again as if you were going to publish the graph. Consider whether adjusting the x and y scales would help visualize the relationship across the full distribution of data more clearly. 
+```{r}
+ggplot(monthly_avg, aes(x = pm10_monthly, y = pm25_monthly)) +
+  geom_point(size = 3,
+             color = "blue",
+             alpha = 0.85) +
+  geom_smooth(method    = "lm",
+              color     = "red",    # muted red trend line
+              fill      = "pink",   # soft red confidence band
+              linewidth = 0.8) +
+  scale_x_log10() +                    # log x: separates compressed low-value months
+  scale_y_log10() +                    # log y: same benefit on response side
+  annotation_logticks() +              # tick marks showing log scale on both axes
+  labs(
+    x       = expression(Monthly~Mean~PM[10]~(mu*g/m^3)),
+    y       = expression(Monthly~Mean~PM[2.5]~(mu*g/m^3)),
+    title   = expression(Monthly~Mean~PM[2.5]~vs.~PM[10]~"at Eugene Hwy 99 (2020)"),
+    caption = "Data: US EPA AQS. Log-log axes used to visualize full distribution."
+  ) +
+  theme_classic(base_size = 13) +
+  theme(
+    plot.title   = element_text(hjust = 0.5, face = "bold", size = 12),
+    plot.caption = element_text(size = 8, color = "gray50"),
+    axis.text    = element_text(color = "black")
+  )
+
+```
+- PM2.5 and PM10 track each other pretty well month-to-month in Eugene during 2020. They stay low most of the year, but during the big smoke event they both shot way up and fine particles (PM2.5) increased especially strongly in that extreme month. 
+

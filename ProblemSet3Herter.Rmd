@@ -1,0 +1,400 @@
+---
+title: "Problem Set 3"
+output: html_document
+---
+
+*Please submit as an html file and show all your work (i.e., do NOT put echo = FALSE in your chunk)*
+
+## 1) SPECIES RICHNESS WITH N-DEPOSITION 
+Check out  http://www.cedarcreek.umn.edu/research/experiments/e001  
+Associated paper for this question is Clark and Tilman 2008; link at the bottom of the website (and DOI: https://doi.org/10.1038/nature06503)  
+
+#### i)  What did Clark and Tilman 2008 find? Check out the paper, let's focus on results presented in Figure 2.  
+Q: What pattern did they observe between species richness and nitrogen treatment?  
+Q: What years and treatments did they include in Figure 2?
+
+</div>
+<br>
+
+<div style="border: 1px solid #ccc; padding: 10px; background-color: #D6EAF8; border-radius: 5px;"><font size="4">**Answer**</font>
+
+Species richness declines with increasing nitrogen addition. Higher N treatments caused faster loss of species over time.
+
+</div>
+<br>
+
+Q: What years and treatments did they include in Figure 2? 
+
+</div>
+<br>
+
+<div style="border: 1px solid #ccc; padding: 10px; background-color: #D6EAF8; border-radius: 5px;">
+<font size="4">**Answer**</font>
+
+Clark and Tilman (2008) included the years 1986, 1990, 1994, 1998, and 2002, and the nitrogen treatments shown in Figure 2 were 10, 34, and 95 kg N per hectare per year. The Control treatment was (0 kg N/ha/yr) represented by dashed line
+
+
+</div>
+<br>
+
+### WORKFLOW: Mimic Figure 2 (except on the y-axis just plot species richness, and don'tworry about the re-creating the dashed lines).  
+Find the metadata! This is experiment e001. You'll want the Plant aboveground biomass data. Find the metadata by linking to the Data Catalog from the bottom of the website. 
+
+_ Found it: https://portal.edirepository.org/nis/mapbrowse?packageid=knb-lter-cdr.273.newest _
+
+#### ii) Within your group, write out the workflow you will use in English and ping one of us when done.
+
+</div>
+<br>
+
+<div style="border: 1px solid #ccc; padding: 10px; background-color: #D6EAF8; border-radius: 5px;"><font size="4">**Answer**</font>
+
+**Data QAQC: **
+1. Remove rows with missing values labeled as NA
+2. Remove rows where Biomass is 0 or negative 
+3. Check that Year, Field, Plot, and NAdd values are reasonable      and within expected ranges
+4. Verify that control plots (NAdd = 0) exist for each field and     year combination
+
+**Data manipulation: **
+1. Count the number of unique species (species richness) in each     plot for each year
+2. Calculate the mean species richness for control plots (NAdd =     0) separately for each field and year
+3. Join the control means back to all plots
+4. Calculate relative species number by dividing each plot's         species count by the control mean for that field and year
+5. Calculate the overall mean relative species number and standard    error for each nitrogen treatment level and year
+6. Filter to the three nitrogen treatments shown in Figure 2         (control, medium N, high N)
+7. Create a line plot
+
+</div>
+<br>
+
+#### iii) After we have discussed as a class, write out and run the workflow in tidyverse R.
+Here's the data import to get you going:
+
+</div>
+<br>
+
+<div style="border: 1px solid #ccc; padding: 10px; background-color: #D6EAF8; border-radius: 5px;"><font size="4">**Answer**</font>
+
+```{r}
+
+# load the tidyverse package
+library(tidyverse)
+
+# create a function to calculate standard error
+calcSE<-function(x){
+  x <- x[is.na(x)==F]
+  sd(x)/sqrt(length(x))
+}
+
+# read in the data 
+cdrplant <- read_csv("e001_Plant aboveground biomass data.csv", skip = 726) 
+
+species_richness <- cdrplant %>%
+  filter(!is.na(Species), Biomass > 0) %>%
+  group_by(Year, Field, Plot, NAdd) %>%
+  summarize(species_count = n_distinct(Species), .groups = "drop")
+
+# Calculate control means per field/year
+control_means <- species_richness %>%
+  filter(NAdd == 0) %>%
+  group_by(Year, Field) %>%
+  summarize(control_mean = mean(species_count), .groups = "drop")
+
+# Calculate relative species number
+relative_richness <- species_richness %>%
+  left_join(control_means, by = c("Year", "Field")) %>%
+  filter(!is.na(control_mean)) %>%  # Remove rows without controls
+  mutate(relative_species = species_count / control_mean)
+
+# Summarize by year and treatment
+relative_summary <- relative_richness %>%
+  group_by(Year, NAdd) %>%
+  summarize(mean_relative = mean(relative_species),
+            se_relative = calcSE(relative_species),
+            .groups = "drop") %>%
+  filter(NAdd %in% c(0, 9.52, 27.2))
+
+# Check for values outside limits
+print(relative_summary %>% filter(mean_relative < 0.4 | mean_relative > 1.4))
+
+# Plot Figure 2 (removed y-axis limits to show all data)
+ggplot(relative_summary, aes(x = Year, y = mean_relative, 
+                              shape = factor(NAdd),
+                              group = factor(NAdd))) +
+  geom_line(linewidth = 0.5) +
+  geom_errorbar(aes(ymin = mean_relative - se_relative,
+                    ymax = mean_relative + se_relative),
+                width = 0.8) +
+  geom_point(size = 3, fill = "blue") +
+  geom_hline(yintercept = 1.0, linetype = "dashed", color = "red") +
+  scale_shape_manual(values = c(16, 15, 17),
+                     labels = c("Control", "9.52 g N m⁻²", "27.2 g N m⁻²")) +
+  theme_minimal(base_size = 14) +
+  labs(x = "Year", 
+       y = "Relative Species Number",
+       shape = "Treatment") +
+  theme(legend.position = "top")
+
+```
+</div>
+<br>
+
+
+## 2) C:N RATIOS WITH N-DEPOSITION
+Check out Wedin & Tilman 1996 Science, DOI: 10.1126/science.274.5293.1720
+
+#### i) What did Wedin and Tilman 1996 find? See text, let's focus on results presented in Figure 1 in the paper.  
+
+</div>
+<br>
+
+<div style="border: 1px solid #ccc; padding: 10px; background-color: #D6EAF8; border-radius: 5px;"><font size="4">**Answer**</font>
+
+Wedin and Tilman (1996) investigated how nitrogen addition affects grassland plant communities and their carbon and nitrogen cycling. They found that adding nitrogen caused native C₄ prairie grasses like schizachyrium scoparium were replaced by non-native C₃ grasses like Agropyron repens. The C4 grasses that disappeared were very efficient at using nitrogen, maintaining high carbon-to-nitrogen (C:N) ratios in their tissue. In contrast, the C3 grasses that took over were less efficient, producing tissues with lower C:N ratios. This change increased nitrogen mineralization in the soil, leading to higher soil nitrate levels, more nitrogen losses from the ecosystem, and reduced carbon storage. 
+
+</div>
+<br>
+
+
+### WORKFLOW: Please make a graph of the ratio of C:N in aboveground biomass in response to the amount of nitrogen added by species. Include standard error bars around each plotted point.
+Unlike Wedin, these data are just from Field C, so no need to represent each field separately.  
+The sample sizes for some species and N levels are very low, please only include species that have at least 4 replicates in each of at least 3 nitrogen levels.  NOTE: It is okay to iteratively check this (e.g., plotting first and then identifying which species match these criteria)
+
+First, find the metadata! This is experiment e001. You'll want the Plant aboveground biomass carbon and nitrogen data. Find the metadata by linking to the Data Catalog from the bottom of the website (https://portal.edirepository.org/nis/mapbrowse?packageid=knb-lter-cdr.279.newest)
+
+#### ii) Write out the workflow you will use in English.
+
+- What QAQC will you do beforehand? 
+</div>
+<br>
+
+<div style="border: 1px solid #ccc; padding: 10px; background-color: #D6EAF8; border-radius: 5px;"><font size="4">**Answer**</font>
+
+1. Remove rows with missing values for Species, %C, or %N
+2. Remove rows with zero or negative values for %C or %N 
+3. Filter to only Field C as specified
+4. Remove outliers 
+5. Check that NAdd values are reasonable and match the experimental design
+
+</div>
+<br>
+
+
+- How will you manipulate the data to create the graph?  
+
+</div>
+<br>
+
+<div style="border: 1px solid #ccc; padding: 10px; background-color: #D6EAF8; border-radius: 5px;"><font size="4">**Answer**</font>
+
+1. Calculate C:N ratio for each sample 
+2. Count the number of duplications for each nitrogen level
+3. Identify species that have at least 4 duplicares in the different nitrogen levels
+4. Filter the dataset to only include those species
+5. Calculate mean C:N ratio and standard error for each species at each nitrogen level
+6. Create a line plot with:
+
+</div>
+<br>
+
+#### iii) Write out and run the workflow in tidyverse R.  
+Please comment your code. Here's the data import to get you going (uncomment the data import):
+
+</div>
+<br>
+
+<div style="border: 1px solid #ccc; padding: 10px; background-color: #D6EAF8; border-radius: 5px;"><font size="4">**Answer**</font>
+
+```{r}
+cdrCN <- read_csv("e001_Plant aboveground biomass carbon and nitrogen.csv", skip = 491) 
+
+#Clean data and calculate C:N ratio
+cdrCN_clean <- cdrCN %>%
+  filter(Field == "C") %>%
+  filter(!is.na(Species), !is.na(`% Carbon`), !is.na(`% Nitrogen`)) %>%
+  filter(`% Carbon` > 0, `% Nitrogen` > 0) %>%
+  filter(`% Carbon` < 60, `% Nitrogen` < 10) %>%
+  mutate(CN_ratio = `% Carbon` / `% Nitrogen`)
+
+# Find species with at least 4 reps in at least 3 N levels
+species_counts <- cdrCN_clean %>%
+  group_by(Species, NAdd) %>%
+  summarize(n_reps = n(), .groups = "drop") %>%
+  filter(n_reps >= 4) %>%
+  group_by(Species) %>%
+  summarize(n_N_levels = n(), .groups = "drop") %>%
+  filter(n_N_levels >= 3)
+
+# Filter to species meeting criteria and calculate summary stats
+CN_summary <- cdrCN_clean %>%
+  filter(Species %in% species_counts$Species) %>%
+  group_by(Species, NAdd) %>%
+  summarize(mean_CN = mean(CN_ratio),
+            se_CN = calcSE(CN_ratio),
+            .groups = "drop")
+
+# Create the plot
+ggplot(CN_summary, aes(x = NAdd, y = mean_CN, 
+                       color = Species, shape = Species)) +
+  geom_line(linewidth = 0.8) +
+  geom_errorbar(aes(ymin = mean_CN - se_CN, 
+                    ymax = mean_CN + se_CN),
+                width = 1) +
+  geom_point(size = 3) +
+  theme_minimal(base_size = 14) +
+  labs(title = "C:N Ratio by Species and Nitrogen Addition",
+       x = "Nitrogen Addition (g N m⁻² yr⁻¹)",
+       y = "C:N Ratio",
+       color = "Species",
+       shape = "Species") +
+  theme(legend.position = "right")
+```
+</div>
+<br>
+
+QUESTION: How does aboveground tissue C:N ratios change with N enrichment? Do patterns appear consistent across species?
+
+</div>
+<br>
+
+<div style="border: 1px solid #ccc; padding: 10px; background-color: #D6EAF8; border-radius: 5px;"><font size="4">**Answer**</font>
+
+C:N ratios generally decrease with nitrogen addition, meaning plants have more nitrogen in their tissues when more nitrogen is available in the soil. However, different species respond differently to the treatments. Most species show declining C:N ratios when nitrogen is added, but the amount of decline varies by species. Lathyrus venosus has the lowest C:N ratios overall because it can fix its own nitrogen from the air. Agropyron repens maintains higher C:N ratios even with added nitrogen, showing it's more nitrogen-efficient. Poa pratensis and Artemisia ludoviciana show the biggest responses, with their C:N ratios dropping sharply when nitrogen is added. While the overall pattern is consistent (more nitrogen = lower C:N ratios), the strength of this response differs among species based on their growth strategies and plant types.
+
+</div>
+<br>
+
+## 3) NUTRIENTS, DISTURBANCE, AND COMMUNITY DISSIMILARITY OVER TIME
+Check out DeSiervo et al 2023 Ecology Letters; https://doi.org/10.1111/ele.14229
+
+#### i) What did DeSiervo et al find? Specifically:
+
+</div>
+<br>
+
+<div style="border: 1px solid #ccc; padding: 10px; background-color: #D6EAF8; border-radius: 5px;"><font size="4">**Answer**</font>
+
+DeSiervo investigated how disturbance and nutrient addition interact to shape successional trajectories in old-field grassland communities over 22 years at Cedar Creek Ecosystem Reserve. They found that communities converged on nutrient-determined equilibria after about a decade, with disturbance primarily influencing early transient dynamics rather than long-term states. Species turnover declined as communities approached dynamic equilibria, and disturbance made successional pathways more direct. Below are detailed answers to the specific questions based on the figures and paper.
+
+</div>
+<br>
+
+Q: In figure 1, which variable explained the most variation in composition between communities? Which explained the least? Did any patterns change over time? 
+
+</div>
+<br>
+
+<div style="border: 1px solid #ccc; padding: 10px; background-color: #D6EAF8; border-radius: 5px;"><font size="4">**Answer**</font>
+
+Fertilization was the biggest factor in explaining differences in plant communities. Its effect grew steadily over the first 10 years and then settled at around 40%. Disturbance had the smallest long-term impact because it explained 24% of the differences in the very first year, but this fell quickly to about 1% after roughly 5 years and stayed very low. Field identity had a medium-sized effect. It started strong due to those different histories, dropped over the first 5 years as the nutrient and disturbance treatments took over, but still explained 10–19% of the variation even after 20 years. This shows that extra nutrients mainly decided what grassland community looks like in the long run, while disturbing the soil mostly affects only the early, changing stages of recovery.
+
+</div>
+<br>
+
+Q: In figure 3, which nutrient treatments exhibited the most similarity amongst plots with the same nutrient treatment? Did this change substantially with disturbance (hint - look at panels a and b).
+
+</div>
+<br>
+
+<div style="border: 1px solid #ccc; padding: 10px; background-color: #D6EAF8; border-radius: 5px;"><font size="4">**Answer**</font>
+
+Control plots had the most similarity amongst plots receiving the same treatment, as shown by the lowest average distance to nutrient centroid in both panels a and b. The lines for control treatments showed lower values compared to fertilized treatments. High nitrogen treatments showed the most variability, espically in the second decade when they began to diverge rather than converge. Disturbed plots that were unfertilized or received low nitrogen settled on a slightly higher distance to centroid compared to intact plots this means disturbance led to less similarity among plots with the same treatment, specifically for control and low-nitrogen treatments.
+
+</div>
+<br>
+
+Q: In figure 3, did differences between nutrient treatments stabilize over time? How was this affected by disturbance?
+
+</div>
+<br>
+
+<div style="border: 1px solid #ccc; padding: 10px; background-color: #D6EAF8; border-radius: 5px;"><font size="4">**Answer**</font>
+
+Yes, the differences between plant communities getting different amounts of fertilizer became stable over time. In panels c and d the average distance between the center points of each nutrient group grew quickly in the first 10 years, showing fast early divergence based on fertilizer levels, then leveled off and stopped changing in the second decade, meaning the communities reached their final stable differences. The one-time soil plowing had only a small effect. the unplowed plots leveled off at about 0.174 distance, while plowed plots leveled off at a slightly smaller 0.170 distance, so plowing made the differences between nutrient groups just a tiny bit smaller in the end, but the change was modest and not a big deal. Both plowed and unplowed areas showed the same quick early spread followed by leveling off, proving that fertilizer levels are what mainly drive the long-term stable plant communities. 
+
+</div>
+<br>
+
+### WORKFLOW: Interpreting a published workflow
+DeSiervo et al. 2023 helpfully published their entire workflow here: 
+https://github.com/melissadesiervo1031/CedarCreekconvergence
+
+### i) QAQC 
+Q: What file did they perform QAQC in? 
+
+</div>
+<br>
+
+<div style="border: 1px solid #ccc; padding: 10px; background-color: #D6EAF8; border-radius: 5px;"><font size="4">**Answer**</font>
+
+The QAQC - data cleaning, formatting, substitutions, handling of litter and duplicates, merging with species attributes, and subsetting for live/sorted/herbaceous plants, is performed in the file 2_upload.format.data
+
+</div>
+<br>
+
+Q: How did they address litter in their QAQC? How did this compare to the choice you made in I?  
+
+</div>
+<br>
+
+<div style="border: 1px solid #ccc; padding: 10px; background-color: #D6EAF8; border-radius: 5px;"><font size="4">**Answer**</font>
+
+They handled litter in a simple way during data cleaning: any rows labeled 'MISCELLANEOUS LITTER', 'WOODY DEBRIS', or containing the word "PINE" were marked as not alive by setting a column called "live" to 0. They also marked unsorted stuff like miscellaneous bits, fungi, moss, or lichen as "sorted = 0" so it wouldn't count as properly identified plant material. When they prepared the data for analysis they only kept rows where live = 1 and sorted = 1. This removed litter and focused only on current-year live plant biomass that was properly sorted and identified.
+
+</div>
+<br>
+
+
+Q: Did they group biennials as annuals, perennials, or their own category?  
+
+</div>
+<br>
+
+<div style="border: 1px solid #ccc; padding: 10px; background-color: #D6EAF8; border-radius: 5px;"><font size="4">**Answer**</font>
+
+In the file titled 2_upload_format_data.R there is a comment that says "Lump biennials in with annuals as they are pretty similar."
+
+</div>
+<br>
+
+
+### i) Figures  
+Q: What code created figure 1? Copy/paste the ggplot command to make it here:  
+
+</div>
+<br>
+
+<div style="border: 1px solid #ccc; padding: 10px; background-color: #D6EAF8; border-radius: 5px;"><font size="4">**Answer**</font>
+
+The file labeled 3_PCoA_Permanova.R contains the code for plotting and recreating figures 1, 2, 3. 
+
+
+variancetimeall_allnut<-permmaster5 %>% ggplot(aes(x=as.numeric(year2), y=R2, group=sourcevariation)) +
+  geom_point() +
+  facet_wrap(~sourcevariation, strip.position = c("top"))+
+  geom_smooth(method="loess", colour="black", size=0.5, fill = "gray1") +
+  geom_text(aes(x = 2.0, y = 0.54, label = abclabels, group = abclabels),size = 4,check_overlap = T)+
+  ylab(expression('Explained variation'))+
+  xlab("Time since experiment (years)")+
+  mytheme+
+  theme(strip.text = element_text(face="bold", size=12))+
+  theme(strip.background = element_blank())
+  
+</div>
+<br>
+
+Q: What file has code to create figure 3? 
+
+</div>
+<br>
+
+<div style="border: 1px solid #ccc; padding: 10px; background-color: #D6EAF8; border-radius: 5px;"><font size="4">**Answer**</font>
+
+File 4_centroids.R has it, theres a comment line as proof: "Recreate Figure 3 abcd and Tables S1, S2, S3, S4 in MS"
+
+</div>
+<br>
+
+
+### Do it yourself?  
+There are a lot of package dependencies, etc, to get this to run. I'm not going to require you do that, but how cool that the authors clearly made it so you *could*. 
