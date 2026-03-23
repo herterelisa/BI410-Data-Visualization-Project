@@ -1,17 +1,19 @@
 # BI 410/510 — Data Management and Visualization
 
-
 Coursework and final project for BI 410. Covers the full data life cycle: storing, cleaning, visualizing, and communicating data using R with a focus on reproducible open science.
 
 ---
 
-## Final project — Sphagnum Shading vs. Warming Analysis
+## Learn R
+In-class scripts worked through during each module to build core R skills hands-on. Covers data import, wrangling, transformation, visualization, and communicating results in R Markdown. One folder per module, designed to follow along with lecture.
 
-> Does increasing shade raise Sphagnum moss water content by as much as long-term warming lowers it — and what does this reveal about whether light or temperature is the more important driver of peatland carbon storage?
+## Problem Sets
+Four graded assignments applying each module's skills to real biological and environmental datasets. Tasks include writing and implementing code, interpreting figures, and drawing conclusions from data — one problem set per module: Visualize, Transform, Wrangle, Communicate.
 
-- Integrated two SPRUCE experiment datasets from Marcell Experimental Forest, MN
-- Compared shading (0–90%) vs. warming (+0 to +9°C) effects on moss water content
-- Converted to a common unit and plotted response curves on a shared scale
-- Implications for managing shrub encroachment as a climate buffer
+## Final project — Sphagnum Shading vs. Warming
+> Does increasing shade raise Sphagnum water content by as much as long-term warming lowers it?
 
+- Two SPRUCE experiment datasets from Marcell Experimental Forest, MN
+- Compared shading (0–90%) vs. warming (+0 to +9°C) on moss water content
+- Full R Markdown workflow: literature review, cleaning, visualization, interpretation
 ---
